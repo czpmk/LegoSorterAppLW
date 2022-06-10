@@ -8,6 +8,7 @@
     <string name="create_dataset">Create dataset</string>
     <string name="sort">Sort</string>
     <string name="analyze">Analyze</string>
+    <string name="analyzeLW">Analyze Lightweight</string>
     <string name="start_text">Start</string>
     <string name="stop_text">Stop</string>
     <string name="stop_sorting_text">Stop sorting</string>

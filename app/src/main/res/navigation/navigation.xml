@@ -18,6 +18,13 @@
             app:popEnterAnim="@android:anim/slide_in_left"
             app:popExitAnim="@android:anim/slide_out_right" />
         <action
+            android:id="@+id/action_startFragment_to_analyzeFragment_LW"
+            app:destination="@id/AnalyzeLWFragment"
+            app:enterAnim="@android:anim/slide_in_left"
+            app:exitAnim="@android:anim/slide_out_right"
+            app:popEnterAnim="@android:anim/slide_in_left"
+            app:popExitAnim="@android:anim/slide_out_right" />
+        <action
             android:id="@+id/action_startFragment_to_captureDialogFragment"
             app:destination="@id/captureDialogFragment" />
         <action
@@ -29,6 +36,11 @@
         android:name="com.lsorter.view.analyze.AnalyzeFragment"
         android:label="fragment_analyze"
         tools:layout="@layout/fragment_analyze" />
+    <fragment
+        android:id="@+id/AnalyzeLWFragment"
+        android:name="com.lsorter.view.analyzeLW.AnalyzeLWFragment"
+        android:label="fragment_analyze_lw"
+        tools:layout="@layout/fragment_analyze_lw" />
     <dialog
         android:id="@+id/captureDialogFragment"
         android:name="com.lsorter.view.capture.CaptureDialogFragment"
