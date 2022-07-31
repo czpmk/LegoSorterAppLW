@@ -65,11 +65,5 @@ class StartFragment : Fragment() {
                 StartFragmentDirections.actionStartFragmentToSortFragment()
             )
         )
-
-        binding.analyzeButtonLW.setOnClickListener(
-            Navigation.createNavigateOnClickListener(
-                StartFragmentDirections.actionStartFragmentToAnalyzeFragmentLW()
-            )
-        )
     }
 }
