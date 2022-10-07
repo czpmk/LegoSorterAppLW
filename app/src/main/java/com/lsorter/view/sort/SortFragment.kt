@@ -22,9 +22,11 @@ import androidx.preference.PreferenceManager
 import com.google.common.util.concurrent.ListenableFuture
 import com.lsorter.analyze.common.RecognizedLegoBrick
 import com.lsorter.analyze.layer.LegoGraphic
+import com.lsorter.connection.ConnectionManager
 import com.lsorter.databinding.FragmentSortBinding
 import com.lsorter.sort.DefaultLegoBrickSorterService
 import com.lsorter.sort.LegoBrickSorterService
+import com.lsorter.sort.LegoBrickSorterServiceLW
 import com.lsorter.utils.PreferencesUtils
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -37,6 +39,7 @@ class SortFragment : Fragment() {
     private lateinit var binding: FragmentSortBinding
     private lateinit var cameraProvider: ProcessCameraProvider
     private lateinit var sorterService: LegoBrickSorterService
+    private lateinit var sorterServiceLW: LegoBrickSorterServiceLW
 
     private var isSortingStarted: AtomicBoolean = AtomicBoolean(false)
     private var isMachineStarted: AtomicBoolean = AtomicBoolean(false)
@@ -79,6 +82,8 @@ class SortFragment : Fragment() {
         super.onActivityCreated(savedInstanceState)
 
         sorterService = DefaultLegoBrickSorterService()
+        sorterServiceLW = LegoBrickSorterServiceLW(ConnectionManager());
+        sorterServiceLW.photoRequest();
 
         viewModel.eventStartStopSortingButtonClicked.observe(
             viewLifecycleOwner,

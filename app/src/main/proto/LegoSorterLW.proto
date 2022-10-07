@@ -1,0 +1,17 @@
+syntax = "proto3";
+import "Messages.proto";
+
+package sorterLW;
+
+option java_package = "com.lsorter.sorterLW";
+option java_outer_classname = "LegoSorterProtoLW";
+
+message PhotoRequest {
+  bytes test = 1;
+}
+
+service LegoSorterLW {
+  rpc start(common.Empty) returns (common.Empty);
+  rpc stop(common.Empty) returns (common.Empty);
+  rpc photoRequestStream(common.Empty) returns (stream PhotoRequest);
+}
