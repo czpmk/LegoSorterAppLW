@@ -20,7 +20,6 @@ class DefaultLegoBrickSorterService : LegoBrickSorterService {
     private val captureExecutor: ExecutorService = Executors.newFixedThreadPool(2)
     private var terminated: AtomicBoolean = AtomicBoolean(false)
     private var canProcessNext: AtomicBoolean = AtomicBoolean(true)
-
     private val connectionManager: ConnectionManager = ConnectionManager()
     private val legoSorterService: LegoSorterGrpc.LegoSorterBlockingStub
 
@@ -55,7 +54,7 @@ class DefaultLegoBrickSorterService : LegoBrickSorterService {
 
     @SuppressLint("CheckResult")
     override fun updateConfig(configuration: LegoBrickSorterService.SorterConfiguration) {
-        val configRequest = LegoSorterProto.SorterConfiguration.newBuilder()
+        val configRequest = CommonMessagesProto.SorterConfiguration.newBuilder()
             .setSpeed(configuration.speed)
             .build()
 
@@ -111,7 +110,7 @@ class DefaultLegoBrickSorterService : LegoBrickSorterService {
         )
     }
 
-    private fun mapResponse(boxes: LegoSorterProto.ListOfBoundingBoxesWithIndexes): List<RecognizedLegoBrick> {
+    private fun mapResponse(boxes: CommonMessagesProto.ListOfBoundingBoxesWithIndexes): List<RecognizedLegoBrick> {
         val detectedBricks = boxes.packetOrBuilderList
 
         return detectedBricks.map {

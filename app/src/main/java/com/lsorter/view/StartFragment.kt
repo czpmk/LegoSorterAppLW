@@ -2,10 +2,12 @@ package com.lsorter.view
 
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.navigation.NavDirections
 import androidx.navigation.Navigation
 import com.lsorter.R
 import com.lsorter.databinding.FragmentStartBinding
@@ -59,6 +61,22 @@ class StartFragment : Fragment() {
                 StartFragmentDirections.actionStartFragmentToAnalyzeFragment()
             )
         )
+
+        binding.asyncSwitch.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                binding.sortButton.setOnClickListener(
+                    Navigation.createNavigateOnClickListener(
+                        StartFragmentDirections.actionStartFragmentToAsyncSortFragment()
+                    )
+                )
+            } else {
+                binding.sortButton.setOnClickListener(
+                    Navigation.createNavigateOnClickListener(
+                        StartFragmentDirections.actionStartFragmentToSortFragment()
+                    )
+                )
+            }
+        }
 
         binding.sortButton.setOnClickListener(
             Navigation.createNavigateOnClickListener(

@@ -18,6 +18,15 @@ message ListOfBoundingBoxes {
   repeated BoundingBox packet = 1;
 }
 
+message BoundingBoxWithIndex {
+  int32 index = 1;
+  BoundingBox bb = 2;
+}
+
+message ListOfBoundingBoxesWithIndexes {
+  repeated BoundingBoxWithIndex packet = 1;
+}
+
 message ImageRequest {
   bytes image = 1;
   int32 rotation = 2;
@@ -25,4 +34,19 @@ message ImageRequest {
 
 message Empty {
 
+}
+
+message SorterConfiguration {
+  int32 speed = 1;
+}
+
+message SorterConfigurationWithIP {
+  int32 speed = 1;
+  string deviceIP = 2;
+}
+
+message ImageStore {
+  bytes image = 1;
+  int32 rotation = 2;
+  string label = 3;
 }
