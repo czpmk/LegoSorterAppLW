@@ -12,8 +12,6 @@ import com.lsorter.asyncSorter.LegoAsyncSorterGrpc
 import com.lsorter.common.CommonMessagesProto
 import com.lsorter.connection.ConnectionManager
 import com.lsorter.sorter.LegoSorterGrpc
-import com.lsorter.sorter.LegoSorterLWGrpc
-import com.lsorter.sorter.LegoSorterProtoLW
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit

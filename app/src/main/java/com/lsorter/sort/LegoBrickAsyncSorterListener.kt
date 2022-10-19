@@ -13,13 +13,15 @@ open class LegoBrickAsyncSorterListener() {
 
     init {
         this.socket.broadcast = true
+        this.socket.reuseAddress = true
     }
 
     open fun start(port: Int, callback: (result: String?) -> Unit){
         Log.d("[AsyncSorterListener]", "Starting listener.")
         thread(start = true) {
             //this.socket.connect(InetSocketAddress(port))
-            this.socket = DatagramSocket(port)
+            if (!(isListening.get()))
+                this.socket = DatagramSocket(port)
             Log.d("[AsyncSorterListener]", "Starting packet capturing.")
             isListening.set(true)
             while(isListening.get()){
