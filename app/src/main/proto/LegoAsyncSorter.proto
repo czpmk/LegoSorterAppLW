@@ -1,0 +1,15 @@
+syntax = "proto3";
+import "Messages.proto";
+
+package asyncSorter;
+
+option java_package = "com.lsorter.asyncSorter";
+option java_outer_classname = "LegoAsyncSorterProto";
+
+service LegoAsyncSorter {
+  rpc processImage(common.ImageRequest) returns (common.Empty);
+  rpc getConfiguration(common.Empty) returns (common.SorterConfigurationWithIP);
+  rpc updateConfiguration(common.SorterConfigurationWithIP) returns (common.Empty);
+  rpc start(common.Empty) returns (common.Empty);
+  rpc stop(common.Empty) returns (common.Empty);
+}

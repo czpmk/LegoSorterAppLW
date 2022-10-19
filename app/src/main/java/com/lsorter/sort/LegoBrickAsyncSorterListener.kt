@@ -27,6 +27,7 @@ open class LegoBrickAsyncSorterListener() {
                         result -> callback.invoke(result)
                 }
             }
+            Log.d("[AsyncSorterListener]", "Closing socket.")
             this.socket.disconnect()
             this.socket.close()
         }
@@ -49,7 +50,6 @@ open class LegoBrickAsyncSorterListener() {
 
 
     open fun stop() {
-        Log.d("[AsyncSorterListener]", "Closing socket.")
         isListening.set(false);
     }
 

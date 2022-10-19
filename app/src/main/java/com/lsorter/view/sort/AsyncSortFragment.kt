@@ -7,6 +7,7 @@ import android.hardware.camera2.CaptureRequest
 import androidx.lifecycle.ViewModelProvider
 import android.os.Bundle
 import android.util.Log
+import android.util.Size
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
@@ -21,6 +22,8 @@ import androidx.lifecycle.Observer
 import androidx.preference.PreferenceManager
 import com.google.common.util.concurrent.ListenableFuture
 import com.lsorter.common.CommonMessagesProto
+import com.lsorter.analyze.common.RecognizedLegoBrick
+import com.lsorter.analyze.layer.LegoGraphic
 import com.lsorter.databinding.FragmentSortBinding
 import com.lsorter.sort.DefaultLegoBrickSorterService
 import com.lsorter.sort.LegoBrickAsyncSorterListener
@@ -29,18 +32,24 @@ import com.lsorter.sort.LegoBrickSorterService
 import com.lsorter.utils.NetworkUtils
 import com.lsorter.utils.PreferencesUtils
 import kotlinx.coroutines.runBlocking
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 class AsyncSortFragment : Fragment() {
 
+    private var cameraExecutor: ExecutorService = Executors.newFixedThreadPool(4)
     private lateinit var viewModel: SortViewModel
     private lateinit var binding: FragmentSortBinding
     private lateinit var cameraProvider: ProcessCameraProvider
-
     private lateinit var sorterService: LegoBrickSorterService
+    private var imageCapture: ImageCapture? = null
+    private var ipAddr: String = ""
+    private val listener: LegoBrickAsyncSorterListener = LegoBrickAsyncSorterListener()
     private lateinit var asyncSorterService: LegoBrickAsyncSorterService
 
-    private val listener: LegoBrickAsyncSorterListener = LegoBrickAsyncSorterListener()
+
     private var isSortingStarted: AtomicBoolean = AtomicBoolean(false)
     private var isMachineStarted: AtomicBoolean = AtomicBoolean(false)
     private var initialized: AtomicBoolean = AtomicBoolean(false)
@@ -48,7 +57,7 @@ class AsyncSortFragment : Fragment() {
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View {
+    ): View? {
         binding = FragmentSortBinding.inflate(inflater, container, false)
         viewModel = ViewModelProvider(this).get(SortViewModel::class.java)
 
@@ -80,7 +89,7 @@ class AsyncSortFragment : Fragment() {
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
-        Log.d("[AsyncSortFragment]","Asynchronous sorting enabled.")
+
         sorterService = DefaultLegoBrickSorterService()
         asyncSorterService = LegoBrickAsyncSorterService()
 
@@ -89,6 +98,9 @@ class AsyncSortFragment : Fragment() {
             Observer { startSorting ->
                 if (startSorting) {
                     setVisibilityOfFocusSeeker(View.GONE)
+                    thread(start=true) {
+                        asyncSorterService.start()
+                    }
                     startSorting()
                     binding.startStopSortingButton.text =
                         getString(com.lsorter.R.string.stop_sorting_text)
@@ -96,6 +108,9 @@ class AsyncSortFragment : Fragment() {
                 } else {
                     isSortingStarted.set(false)
                     setVisibilityOfFocusSeeker(View.VISIBLE)
+                    thread(start=true) {
+                        asyncSorterService.stop()
+                    }
                     stopSorting()
                     binding.startStopSortingButton.text =
                         getString(com.lsorter.R.string.start_sorting_text)
@@ -120,7 +135,6 @@ class AsyncSortFragment : Fragment() {
             }
         )
 
-
     }
 
     override fun onResume() {
@@ -142,22 +156,34 @@ class AsyncSortFragment : Fragment() {
     }
 
     private fun startSorting() {
-        initialize(startProcessing = true)
+        if(!(listener.isListening.get())){
+            listener.start(LISTENER_PORT) { result ->
+                Log.d("[AsyncSortFragment]", "Listener callback: $result")
+                imageCapture?.let {
+                    asyncSorterService.captureImage(
+                        it
+                    ) { image -> processImage(image) }
+                }
+            }
+            initialize(startProcessing = true)
+        }
     }
 
     private fun stopSorting() {
-        listener.stop()
-        asyncSorterService.stop()
+        sorterService.stopImageCapturing()
+        if(listener.isListening.get()){
+            listener.stop()
+        }
     }
 
     private fun initialize(startProcessing: Boolean = false): ListenableFuture<ProcessCameraProvider> {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
         val pref = PreferenceManager.getDefaultSharedPreferences(requireContext())
         val conveyorSpeed = pref.getInt(CONVEYOR_SPEED_VALUE_PREFERENCE_KEY, 50)
-        //val runConveyorTime = pref.getString(RUN_CONVEYOR_TIME_PREFERENCE_KEY, "500")!!.toInt()
-        //val sortingMode = pref.getString(SORTING_MODE_PREFERENCE_KEY, "0")!!.toInt()
 
-        val ipAddr = runBlocking { return@runBlocking NetworkUtils.getDeviceIP(requireContext()) }
+        if(ipAddr == ""){
+            ipAddr = runBlocking { return@runBlocking NetworkUtils.getDeviceIP(requireContext()) }
+        }
 
         val config = CommonMessagesProto.SorterConfigurationWithIP.newBuilder()
             .setSpeed(conveyorSpeed)
@@ -175,18 +201,8 @@ class AsyncSortFragment : Fragment() {
                 .build()
 
             if (startProcessing) {
-                val imageCapture = getImageCapture()
-                val camera =
-                    cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture, preview)
-                asyncSorterService.start()
-                Log.d("[AsyncSortFragment]", "Listener starting.")
-                listener.start(LISTENER_PORT) { result ->
-                    Log.d("[AsyncSortFragment]", "Listener callback: $result")
-                    asyncSorterService.captureImage(
-                        imageCapture
-                    ) { image -> processImage(image) }
-                }
-                camera
+                if(imageCapture == null) imageCapture = getImageCapture()
+                cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture, preview)
             } else {
                 cameraProvider.bindToLifecycle(this, cameraSelector, preview)
             }.apply {
@@ -195,7 +211,6 @@ class AsyncSortFragment : Fragment() {
             }
 
             preview.setSurfaceProvider(binding.viewFinder.surfaceProvider)
-
             initialized.set(true)
         }, ContextCompat.getMainExecutor(this.requireContext()))
 
@@ -217,11 +232,7 @@ class AsyncSortFragment : Fragment() {
 
 
     private fun processImage(image: ImageProxy) {
-        if (isSortingStarted.get()) {
-            Log.d("[processImage]", "DEBUG")
-            asyncSorterService.processImage(image)
-        }
-        image.close()
+        asyncSorterService.processImage(image)
     }
 
     private fun getImageCapture(): ImageCapture {
@@ -248,22 +259,19 @@ class AsyncSortFragment : Fragment() {
             if (isSortingStarted.get() || isMachineStarted.get()) {
                 stopSorting()
             }
-
             if(listener.isListening.get()){
                 listener.stop()
             }
-            asyncSorterService.stop()
-
             initialized.set(false)
         }
         super.onDestroy()
     }
 
     companion object {
-        //const val SORTING_MODE_PREFERENCE_KEY: String = "SORTER_MODE_PREFERENCE"
-        //const val STOP_CAPTURE_RUN_PREFERENCE: Int = 0
-        //const val CONTINUOUS_MOVE_PREFERENCE: Int = 1
-        //const val RUN_CONVEYOR_TIME_PREFERENCE_KEY: String = "RUN_CONVEYOR_TIME_VALUE"
+        const val SORTING_MODE_PREFERENCE_KEY: String = "SORTER_MODE_PREFERENCE"
+        const val STOP_CAPTURE_RUN_PREFERENCE: Int = 0
+        const val CONTINUOUS_MOVE_PREFERENCE: Int = 1
+        const val RUN_CONVEYOR_TIME_PREFERENCE_KEY: String = "RUN_CONVEYOR_TIME_VALUE"
         const val CONVEYOR_SPEED_VALUE_PREFERENCE_KEY: String = "SORTER_CONVEYOR_SPEED_VALUE"
         const val LISTENER_PORT = 50052
     }
