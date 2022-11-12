@@ -6,8 +6,6 @@ import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import androidx.lifecycle.ViewModelProvider
 import android.os.Bundle
-import android.util.Log
-import android.util.Size
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
@@ -22,16 +20,11 @@ import androidx.lifecycle.Observer
 import androidx.preference.PreferenceManager
 import com.google.common.util.concurrent.ListenableFuture
 import com.lsorter.common.CommonMessagesProto
-import com.lsorter.analyze.common.RecognizedLegoBrick
-import com.lsorter.analyze.layer.LegoGraphic
 import com.lsorter.databinding.FragmentSortBinding
 import com.lsorter.sort.DefaultLegoBrickSorterService
-import com.lsorter.sort.LegoBrickAsyncSorterListener
 import com.lsorter.sort.LegoBrickAsyncSorterService
 import com.lsorter.sort.LegoBrickSorterService
-import com.lsorter.utils.NetworkUtils
 import com.lsorter.utils.PreferencesUtils
-import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -44,9 +37,6 @@ class AsyncSortFragment : Fragment() {
     private lateinit var binding: FragmentSortBinding
     private lateinit var cameraProvider: ProcessCameraProvider
     private lateinit var sorterService: LegoBrickSorterService
-    private var imageCapture: ImageCapture? = null
-    private var ipAddr: String = ""
-    private val listener: LegoBrickAsyncSorterListener = LegoBrickAsyncSorterListener()
     private lateinit var asyncSorterService: LegoBrickAsyncSorterService
 
 
@@ -98,7 +88,7 @@ class AsyncSortFragment : Fragment() {
             Observer { startSorting ->
                 if (startSorting) {
                     setVisibilityOfFocusSeeker(View.GONE)
-                    thread(start=true) {
+                    thread(start = true) {
                         asyncSorterService.start()
                     }
                     startSorting()
@@ -108,7 +98,7 @@ class AsyncSortFragment : Fragment() {
                 } else {
                     isSortingStarted.set(false)
                     setVisibilityOfFocusSeeker(View.VISIBLE)
-                    thread(start=true) {
+                    thread(start = true) {
                         asyncSorterService.stop()
                     }
                     stopSorting()
@@ -156,38 +146,23 @@ class AsyncSortFragment : Fragment() {
     }
 
     private fun startSorting() {
-        if(!(listener.isListening.get())){
-            listener.start(LISTENER_PORT) { result ->
-                Log.d("[AsyncSortFragment]", "Listener callback: $result")
-                imageCapture?.let {
-                    asyncSorterService.captureImage(
-                        it
-                    ) { image -> processImage(image) }
-                }
-            }
-            initialize(startProcessing = true)
-        }
+        initialize(startProcessing = true)
     }
 
     private fun stopSorting() {
         sorterService.stopImageCapturing()
-        if(listener.isListening.get()){
-            listener.stop()
-        }
     }
 
     private fun initialize(startProcessing: Boolean = false): ListenableFuture<ProcessCameraProvider> {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
         val pref = PreferenceManager.getDefaultSharedPreferences(requireContext())
         val conveyorSpeed = pref.getInt(CONVEYOR_SPEED_VALUE_PREFERENCE_KEY, 50)
+        val runConveyorTime =
+            pref.getString(SortFragment.RUN_CONVEYOR_TIME_PREFERENCE_KEY, "500")!!.toInt()
+        val sortingMode = pref.getString(SortFragment.SORTING_MODE_PREFERENCE_KEY, "0")!!.toInt()
 
-        if(ipAddr == ""){
-            ipAddr = runBlocking { return@runBlocking NetworkUtils.getDeviceIP(requireContext()) }
-        }
-
-        val config = CommonMessagesProto.SorterConfigurationWithIP.newBuilder()
+        val config = CommonMessagesProto.SorterConfiguration.newBuilder()
             .setSpeed(conveyorSpeed)
-            .setDeviceIP(ipAddr)
             .build()
         asyncSorterService.updateConfig(config)
 
@@ -201,8 +176,19 @@ class AsyncSortFragment : Fragment() {
                 .build()
 
             if (startProcessing) {
-                if(imageCapture == null) imageCapture = getImageCapture()
-                cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture, preview)
+                if (sortingMode == SortFragment.STOP_CAPTURE_RUN_PREFERENCE) {
+                    val imageCapture = getImageCapture()
+                    val camera =
+                        cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture, preview)
+                    asyncSorterService.scheduleImageCapturingAndStartMachine(
+                        imageCapture,
+                        runConveyorTime
+                    ) { image -> asyncSorterService.processImage(image) }
+                    camera
+                } else {
+                    val imageAnalysis = getImageAnalysis()
+                    cameraProvider.bindToLifecycle(this, cameraSelector, imageAnalysis, preview)
+                }
             } else {
                 cameraProvider.bindToLifecycle(this, cameraSelector, preview)
             }.apply {
@@ -239,6 +225,19 @@ class AsyncSortFragment : Fragment() {
         return PreferencesUtils.extendImageCapture(ImageCapture.Builder(), context).build()
     }
 
+    private fun getImageAnalysis(): ImageAnalysis {
+        return PreferencesUtils.extendImageAnalysis(ImageAnalysis.Builder(), context)
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_BLOCK_PRODUCER)
+            .setImageQueueDepth(1)
+            .build()
+            .also {
+                it.setAnalyzer(
+                    cameraExecutor,
+                    ImageAnalysis.Analyzer { image -> asyncSorterService.processImage(image) }
+                )
+            }
+    }
+
     @SuppressLint("UnsafeExperimentalUsageError")
     private fun setFocusDistance(previewBuilder: Preview.Builder) {
         Camera2Interop.Extender(previewBuilder).apply {
@@ -259,9 +258,6 @@ class AsyncSortFragment : Fragment() {
             if (isSortingStarted.get() || isMachineStarted.get()) {
                 stopSorting()
             }
-            if(listener.isListening.get()){
-                listener.stop()
-            }
             initialized.set(false)
         }
         super.onDestroy()
@@ -273,6 +269,5 @@ class AsyncSortFragment : Fragment() {
         const val CONTINUOUS_MOVE_PREFERENCE: Int = 1
         const val RUN_CONVEYOR_TIME_PREFERENCE_KEY: String = "RUN_CONVEYOR_TIME_VALUE"
         const val CONVEYOR_SPEED_VALUE_PREFERENCE_KEY: String = "SORTER_CONVEYOR_SPEED_VALUE"
-        const val LISTENER_PORT = 50052
     }
 }

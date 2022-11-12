@@ -18,14 +18,19 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 
-
 class LegoBrickAsyncSorterService {
-    data class SorterConfiguration(val speed: Int = 50, val deviceIp: String)
+    data class SorterConfiguration(val speed: Int = 50)
+
     private val captureExecutor: ExecutorService = Executors.newFixedThreadPool(2)
+    private var terminated: AtomicBoolean = AtomicBoolean(false)
+    private var canProcessNext: AtomicBoolean = AtomicBoolean(true)
     private val connectionManager: ConnectionManager = ConnectionManager()
     private val legoAsyncSorterService: LegoAsyncSorterGrpc.LegoAsyncSorterBlockingStub
+    private val legoSorterService: LegoSorterGrpc.LegoSorterBlockingStub
 
     init {
+        this.legoSorterService =
+            LegoSorterGrpc.newBlockingStub(connectionManager.getConnectionChannel())
         this.legoAsyncSorterService =
             LegoAsyncSorterGrpc.newBlockingStub(connectionManager.getConnectionChannel())
     }
@@ -42,8 +47,46 @@ class LegoBrickAsyncSorterService {
 
 
     @SuppressLint("CheckResult")
-    fun updateConfig(configuration: CommonMessagesProto.SorterConfigurationWithIP) {
+    fun updateConfig(configuration: CommonMessagesProto.SorterConfiguration) {
         this.legoAsyncSorterService.updateConfiguration(configuration)
+    }
+
+    @SuppressLint("CheckResult")
+    fun startConveyorBelt() {
+        this.legoSorterService.stopMachine(CommonMessagesProto.Empty.getDefaultInstance())
+    }
+
+    @SuppressLint("CheckResult")
+    fun stopConveyorBelt() {
+        this.legoSorterService.stopMachine(CommonMessagesProto.Empty.getDefaultInstance())
+    }
+
+    fun scheduleImageCapturingAndStartMachine(
+        imageCapture: ImageCapture,
+        runTime: Int,
+        callback: (ImageProxy) -> Unit
+    ) {
+        terminated.set(false)
+        canProcessNext.set(true)
+        captureExecutor.submit {
+            while (!terminated.get()) {
+                synchronized(canProcessNext) {
+                    if (canProcessNext.get()) {
+                        canProcessNext.set(false)
+                        stopConveyorBelt()
+                        captureImage(imageCapture) { image ->
+                            callback(image)
+                            if (!terminated.get()) {
+                                startConveyorBelt()
+                                Thread.sleep(runTime.toLong())
+                                canProcessNext.set(true)
+                            }
+                        }
+                    }
+                    Thread.sleep(10)
+                }
+            }
+        }
     }
 
     fun getConfig(): SorterConfiguration {
