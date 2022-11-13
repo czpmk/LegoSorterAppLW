@@ -1,71 +1,67 @@
-package com.lsorter.sort
+package com.lsorter.sort;
 
 import android.annotation.SuppressLint
 import android.graphics.Rect
+import android.util.Log
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.internal.utils.ImageUtil
 import com.google.protobuf.ByteString
 import com.lsorter.analyze.common.RecognizedLegoBrick
+import com.lsorter.asyncSorter.LegoAsyncSorterGrpc
 import com.lsorter.common.CommonMessagesProto
 import com.lsorter.connection.ConnectionManager
 import com.lsorter.sorter.LegoSorterGrpc
-import com.lsorter.sorter.LegoSorterProto
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-class DefaultLegoBrickSorterService : LegoBrickSorterService {
+
+class LegoBrickAsyncSorterService {
+    data class SorterConfiguration(val speed: Int = 50)
+
     private val captureExecutor: ExecutorService = Executors.newFixedThreadPool(2)
     private var terminated: AtomicBoolean = AtomicBoolean(false)
     private var canProcessNext: AtomicBoolean = AtomicBoolean(true)
     private val connectionManager: ConnectionManager = ConnectionManager()
+    private val legoAsyncSorterService: LegoAsyncSorterGrpc.LegoAsyncSorterBlockingStub
     private val legoSorterService: LegoSorterGrpc.LegoSorterBlockingStub
 
     init {
         this.legoSorterService =
             LegoSorterGrpc.newBlockingStub(connectionManager.getConnectionChannel())
+        this.legoAsyncSorterService =
+            LegoAsyncSorterGrpc.newBlockingStub(connectionManager.getConnectionChannel())
     }
 
     @SuppressLint("CheckResult")
-    override fun startMachine() {
-        this.legoSorterService.startMachine(CommonMessagesProto.Empty.getDefaultInstance())
+    fun start() {
+        this.legoAsyncSorterService.start(CommonMessagesProto.Empty.getDefaultInstance())
     }
 
     @SuppressLint("CheckResult")
-    override fun stopMachine() {
+    fun stop() {
+        this.legoAsyncSorterService.stop(CommonMessagesProto.Empty.getDefaultInstance())
+    }
+
+
+    @SuppressLint("CheckResult")
+    fun updateConfig(configuration: CommonMessagesProto.SorterConfiguration) {
+        this.legoAsyncSorterService.updateConfiguration(configuration)
+    }
+
+    @SuppressLint("CheckResult")
+    fun startConveyorBelt() {
         this.legoSorterService.stopMachine(CommonMessagesProto.Empty.getDefaultInstance())
     }
 
-    @SuppressLint("RestrictedApi")
-    override fun processImage(image: ImageProxy): List<RecognizedLegoBrick> {
-        val imageRequest = CommonMessagesProto.ImageRequest.newBuilder()
-            .setImage(
-                ByteString.copyFrom(
-                    ImageUtil.imageToJpegByteArray(image)
-                )
-            ).setRotation(image.imageInfo.rotationDegrees)
-            .build()
-        image.close()
-
-        return mapResponse(legoSorterService.processNextImage(imageRequest))
-    }
-
     @SuppressLint("CheckResult")
-    override fun updateConfig(configuration: LegoBrickSorterService.SorterConfiguration) {
-        val configRequest = CommonMessagesProto.SorterConfiguration.newBuilder()
-            .setSpeed(configuration.speed)
-            .build()
-
-        legoSorterService.updateConfiguration(configRequest)
+    fun stopConveyorBelt() {
+        this.legoSorterService.stopMachine(CommonMessagesProto.Empty.getDefaultInstance())
     }
 
-    override fun getConfig(): LegoBrickSorterService.SorterConfiguration {
-        TODO("Not yet implemented")
-    }
-
-    override fun scheduleImageCapturingAndStartMachine(
+    fun scheduleImageCapturingAndStartMachine(
         imageCapture: ImageCapture,
         runTime: Int,
         callback: (ImageProxy) -> Unit
@@ -77,11 +73,11 @@ class DefaultLegoBrickSorterService : LegoBrickSorterService {
                 synchronized(canProcessNext) {
                     if (canProcessNext.get()) {
                         canProcessNext.set(false)
-                        stopMachine()
+                        stopConveyorBelt()
                         captureImage(imageCapture) { image ->
                             callback(image)
                             if (!terminated.get()) {
-                                this.legoSorterService.startMachine(CommonMessagesProto.Empty.getDefaultInstance())
+                                startConveyorBelt()
                                 Thread.sleep(runTime.toLong())
                                 canProcessNext.set(true)
                             }
@@ -93,12 +89,26 @@ class DefaultLegoBrickSorterService : LegoBrickSorterService {
         }
     }
 
-    override fun stopImageCapturing() {
-        terminated.set(true)
-        stopMachine()
+    fun getConfig(): SorterConfiguration {
+        TODO("Not yet implemented")
     }
 
-    private fun captureImage(
+
+    @SuppressLint("CheckResult", "RestrictedApi")
+    fun processImage(image: ImageProxy) {
+        val imageRequest = CommonMessagesProto.ImageRequest.newBuilder()
+            .setImage(
+                ByteString.copyFrom(
+                    ImageUtil.imageToJpegByteArray(image)
+                )
+            ).setRotation(image.imageInfo.rotationDegrees)
+            .build()
+        image.close()
+        Log.d("[processImage2]", "DEBUG")
+        this.legoAsyncSorterService.processImage(imageRequest)
+    }
+
+    fun captureImage(
         imageCapture: ImageCapture,
         callback: (ImageProxy) -> Unit
     ) {
@@ -110,18 +120,4 @@ class DefaultLegoBrickSorterService : LegoBrickSorterService {
         )
     }
 
-    private fun mapResponse(boxes: CommonMessagesProto.ListOfBoundingBoxesWithIndexes): List<RecognizedLegoBrick> {
-        val detectedBricks = boxes.packetOrBuilderList
-
-        return detectedBricks.map {
-            RecognizedLegoBrick(
-                Rect(it.bb.xmin, it.bb.ymax, it.bb.xmax, it.bb.ymin),
-                RecognizedLegoBrick.Label(
-                    it.bb.score,
-                    it.bb.label,
-                    it.index
-                )
-            )
-        }
-    }
 }

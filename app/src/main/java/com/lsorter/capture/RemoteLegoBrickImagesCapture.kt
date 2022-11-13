@@ -11,6 +11,7 @@ import com.lsorter.connection.ConnectionManager
 import io.grpc.ManagedChannel
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
+import com.lsorter.common.CommonMessagesProto
 
 class RemoteLegoBrickImagesCapture(private val imageCapture: ImageCapture) :
     LegoBrickDatasetCapture {
@@ -21,7 +22,7 @@ class RemoteLegoBrickImagesCapture(private val imageCapture: ImageCapture) :
     private val connectionManager: ConnectionManager = ConnectionManager()
     private val connectionChannel: ManagedChannel
     private val imageCaptureLock = Any()
-    private var requestQueue: ConcurrentLinkedQueue<LegoCaptureProto.ImageStore>
+    private var requestQueue: ConcurrentLinkedQueue<CommonMessagesProto.ImageStore>
     private var onImageCapturedListener: () -> Unit = { }
     private val legoBrickService: LegoCaptureGrpc.LegoCaptureFutureStub
     private val canProcessNext: AtomicBoolean
@@ -29,7 +30,7 @@ class RemoteLegoBrickImagesCapture(private val imageCapture: ImageCapture) :
 
     @SuppressLint("RestrictedApi", "CheckResult")
     fun sendLegoImageWithLabel(image: ImageProxy, label: String) {
-        val request = LegoCaptureProto.ImageStore.newBuilder()
+        val request = CommonMessagesProto.ImageStore.newBuilder()
             .setImage(
                 ByteString.copyFrom(
                     ImageUtil.imageToJpegByteArray(image)

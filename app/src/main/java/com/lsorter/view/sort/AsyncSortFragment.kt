@@ -6,7 +6,6 @@ import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import androidx.lifecycle.ViewModelProvider
 import android.os.Bundle
-import android.util.Size
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
@@ -20,23 +19,26 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Observer
 import androidx.preference.PreferenceManager
 import com.google.common.util.concurrent.ListenableFuture
-import com.lsorter.analyze.common.RecognizedLegoBrick
-import com.lsorter.analyze.layer.LegoGraphic
+import com.lsorter.common.CommonMessagesProto
 import com.lsorter.databinding.FragmentSortBinding
 import com.lsorter.sort.DefaultLegoBrickSorterService
+import com.lsorter.sort.LegoBrickAsyncSorterService
 import com.lsorter.sort.LegoBrickSorterService
 import com.lsorter.utils.PreferencesUtils
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
-class SortFragment : Fragment() {
+class AsyncSortFragment : Fragment() {
 
     private var cameraExecutor: ExecutorService = Executors.newFixedThreadPool(4)
     private lateinit var viewModel: SortViewModel
     private lateinit var binding: FragmentSortBinding
     private lateinit var cameraProvider: ProcessCameraProvider
     private lateinit var sorterService: LegoBrickSorterService
+    private lateinit var asyncSorterService: LegoBrickAsyncSorterService
+
 
     private var isSortingStarted: AtomicBoolean = AtomicBoolean(false)
     private var isMachineStarted: AtomicBoolean = AtomicBoolean(false)
@@ -79,12 +81,16 @@ class SortFragment : Fragment() {
         super.onActivityCreated(savedInstanceState)
 
         sorterService = DefaultLegoBrickSorterService()
+        asyncSorterService = LegoBrickAsyncSorterService()
 
         viewModel.eventStartStopSortingButtonClicked.observe(
             viewLifecycleOwner,
             Observer { startSorting ->
                 if (startSorting) {
                     setVisibilityOfFocusSeeker(View.GONE)
+                    thread(start = true) {
+                        asyncSorterService.start()
+                    }
                     startSorting()
                     binding.startStopSortingButton.text =
                         getString(com.lsorter.R.string.stop_sorting_text)
@@ -92,6 +98,9 @@ class SortFragment : Fragment() {
                 } else {
                     isSortingStarted.set(false)
                     setVisibilityOfFocusSeeker(View.VISIBLE)
+                    thread(start = true) {
+                        asyncSorterService.stop()
+                    }
                     stopSorting()
                     binding.startStopSortingButton.text =
                         getString(com.lsorter.R.string.start_sorting_text)
@@ -142,20 +151,20 @@ class SortFragment : Fragment() {
 
     private fun stopSorting() {
         sorterService.stopImageCapturing()
-        binding.graphicOverlay.let {
-            it.clear()
-            it.postInvalidate()
-        }
     }
 
     private fun initialize(startProcessing: Boolean = false): ListenableFuture<ProcessCameraProvider> {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
         val pref = PreferenceManager.getDefaultSharedPreferences(requireContext())
         val conveyorSpeed = pref.getInt(CONVEYOR_SPEED_VALUE_PREFERENCE_KEY, 50)
-        val runConveyorTime = pref.getString(RUN_CONVEYOR_TIME_PREFERENCE_KEY, "500")!!.toInt()
-        val sortingMode = pref.getString(SORTING_MODE_PREFERENCE_KEY, "0")!!.toInt()
+        val runConveyorTime =
+            pref.getString(SortFragment.RUN_CONVEYOR_TIME_PREFERENCE_KEY, "500")!!.toInt()
+        val sortingMode = pref.getString(SortFragment.SORTING_MODE_PREFERENCE_KEY, "0")!!.toInt()
 
-        sorterService.updateConfig(LegoBrickSorterService.SorterConfiguration(conveyorSpeed))
+        val config = CommonMessagesProto.SorterConfiguration.newBuilder()
+            .setSpeed(conveyorSpeed)
+            .build()
+        asyncSorterService.updateConfig(config)
 
         cameraProviderFuture.addListener(Runnable {
             this.cameraProvider = cameraProviderFuture.get()
@@ -167,14 +176,14 @@ class SortFragment : Fragment() {
                 .build()
 
             if (startProcessing) {
-                if (sortingMode == STOP_CAPTURE_RUN_PREFERENCE) {
+                if (sortingMode == SortFragment.STOP_CAPTURE_RUN_PREFERENCE) {
                     val imageCapture = getImageCapture()
                     val camera =
                         cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture, preview)
-                    sorterService.scheduleImageCapturingAndStartMachine(
+                    asyncSorterService.scheduleImageCapturingAndStartMachine(
                         imageCapture,
                         runConveyorTime
-                    ) { image -> processImageAndDrawBricks(image) }
+                    ) { image -> asyncSorterService.processImage(image) }
                     camera
                 } else {
                     val imageAnalysis = getImageAnalysis()
@@ -197,14 +206,23 @@ class SortFragment : Fragment() {
     @SuppressLint("UnsafeExperimentalUsageError", "RestrictedApi")
     private fun Camera.extractLensCharacteristics() {
         Camera2CameraInfo.extractCameraCharacteristics(this.cameraInfo).apply {
-            this@SortFragment.viewModel.minimumCameraFocusDistance =
+            this@AsyncSortFragment.viewModel.minimumCameraFocusDistance =
                 this.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)
                     ?: 0f
 
-            this@SortFragment.viewModel.maximumCameraFocusDistance =
+            this@AsyncSortFragment.viewModel.maximumCameraFocusDistance =
                 this.get(CameraCharacteristics.LENS_INFO_HYPERFOCAL_DISTANCE)
                     ?: Float.MAX_VALUE
         }
+    }
+
+
+    private fun processImage(image: ImageProxy) {
+        asyncSorterService.processImage(image)
+    }
+
+    private fun getImageCapture(): ImageCapture {
+        return PreferencesUtils.extendImageCapture(ImageCapture.Builder(), context).build()
     }
 
     private fun getImageAnalysis(): ImageAnalysis {
@@ -215,28 +233,9 @@ class SortFragment : Fragment() {
             .also {
                 it.setAnalyzer(
                     cameraExecutor,
-                    ImageAnalysis.Analyzer { image -> processImageAndDrawBricks(image) }
+                    ImageAnalysis.Analyzer { image -> asyncSorterService.processImage(image) }
                 )
             }
-    }
-
-    private fun processImageAndDrawBricks(image: ImageProxy) {
-        if (isSortingStarted.get()) {
-            binding.graphicOverlay.setImageSourceInfo(
-                image.width,
-                image.height,
-                image.imageInfo.rotationDegrees
-            )
-
-            sorterService.processImage(image).apply {
-                drawBoundingBoxes(this)
-            }
-        }
-        image.close()
-    }
-
-    private fun getImageCapture(): ImageCapture {
-        return PreferencesUtils.extendImageCapture(ImageCapture.Builder(), context).build()
     }
 
     @SuppressLint("UnsafeExperimentalUsageError")
@@ -253,18 +252,6 @@ class SortFragment : Fragment() {
         }
     }
 
-    private fun drawBoundingBoxes(recognizedBricks: List<RecognizedLegoBrick>) {
-        binding.graphicOverlay.clear()
-
-        if (isSortingStarted.get()) {
-
-            for (brick in recognizedBricks) {
-                binding.graphicOverlay.add(LegoGraphic(binding.graphicOverlay, brick))
-            }
-
-            binding.graphicOverlay.postInvalidate()
-        }
-    }
 
     override fun onDestroy() {
         if (initialized.get()) {

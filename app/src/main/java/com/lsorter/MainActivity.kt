@@ -50,6 +50,6 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS =
-            arrayOf(Manifest.permission.CAMERA, Manifest.permission.INTERNET)
+            arrayOf(Manifest.permission.CAMERA, Manifest.permission.INTERNET, Manifest.permission.ACCESS_WIFI_STATE)
     }
 }
