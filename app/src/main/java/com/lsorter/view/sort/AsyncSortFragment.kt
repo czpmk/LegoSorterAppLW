@@ -150,7 +150,7 @@ class AsyncSortFragment : Fragment() {
     }
 
     private fun stopSorting() {
-        sorterService.stopImageCapturing()
+        asyncSorterService.stopImageCapturing()
     }
 
     private fun initialize(startProcessing: Boolean = false): ListenableFuture<ProcessCameraProvider> {
@@ -158,8 +158,8 @@ class AsyncSortFragment : Fragment() {
         val pref = PreferenceManager.getDefaultSharedPreferences(requireContext())
         val conveyorSpeed = pref.getInt(CONVEYOR_SPEED_VALUE_PREFERENCE_KEY, 50)
         val runConveyorTime =
-            pref.getString(SortFragment.RUN_CONVEYOR_TIME_PREFERENCE_KEY, "500")!!.toInt()
-        val sortingMode = pref.getString(SortFragment.SORTING_MODE_PREFERENCE_KEY, "0")!!.toInt()
+            pref.getString(RUN_CONVEYOR_TIME_PREFERENCE_KEY, "500")!!.toInt()
+        val sortingMode = pref.getString(SORTING_MODE_PREFERENCE_KEY, "0")!!.toInt()
 
         val config = CommonMessagesProto.SorterConfiguration.newBuilder()
             .setSpeed(conveyorSpeed)
@@ -176,14 +176,27 @@ class AsyncSortFragment : Fragment() {
                 .build()
 
             if (startProcessing) {
-                if (sortingMode == SortFragment.STOP_CAPTURE_RUN_PREFERENCE) {
+                if (sortingMode == STOP_CAPTURE_RUN_PREFERENCE) {
                     val imageCapture = getImageCapture()
                     val camera =
                         cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture, preview)
+
                     asyncSorterService.scheduleImageCapturingAndStartMachine(
                         imageCapture,
-                        runConveyorTime
-                    ) { image -> asyncSorterService.processImage(image) }
+                        runConveyorTime,
+                        continousMode = false
+                    ) { image -> processImage(image) }
+                    camera
+                } else if (sortingMode == CONTINUOUS_DELAYED_CAPTURE_PREFERENCE) {
+                    val imageCapture = getImageCapture()
+                    val camera =
+                        cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture, preview)
+
+                    asyncSorterService.scheduleImageCapturingAndStartMachine(
+                        imageCapture,
+                        runConveyorTime,
+                        continousMode = true
+                    ) { image -> processImage(image) }
                     camera
                 } else {
                     val imageAnalysis = getImageAnalysis()
@@ -233,7 +246,7 @@ class AsyncSortFragment : Fragment() {
             .also {
                 it.setAnalyzer(
                     cameraExecutor,
-                    ImageAnalysis.Analyzer { image -> asyncSorterService.processImage(image) }
+                    ImageAnalysis.Analyzer { image -> processImage(image) }
                 )
             }
     }
@@ -267,6 +280,7 @@ class AsyncSortFragment : Fragment() {
         const val SORTING_MODE_PREFERENCE_KEY: String = "SORTER_MODE_PREFERENCE"
         const val STOP_CAPTURE_RUN_PREFERENCE: Int = 0
         const val CONTINUOUS_MOVE_PREFERENCE: Int = 1
+        const val CONTINUOUS_DELAYED_CAPTURE_PREFERENCE: Int = 2
         const val RUN_CONVEYOR_TIME_PREFERENCE_KEY: String = "RUN_CONVEYOR_TIME_VALUE"
         const val CONVEYOR_SPEED_VALUE_PREFERENCE_KEY: String = "SORTER_CONVEYOR_SPEED_VALUE"
     }
