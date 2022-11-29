@@ -46,10 +46,12 @@
     <string-array name="sorting_mode_items">
         <item>Stop - Capture - Run</item>
         <item>Continuous move</item>
+        <item>Continuous move (capture delayed)</item>
     </string-array>
     <string-array name="sorting_mode_values">
         <item>0</item>
         <item>1</item>
+        <item>2</item>
     </string-array>
 
 </resources>

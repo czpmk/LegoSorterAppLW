@@ -53,7 +53,7 @@ class LegoBrickAsyncSorterService {
 
     @SuppressLint("CheckResult")
     fun startConveyorBelt() {
-        this.legoSorterService.stopMachine(CommonMessagesProto.Empty.getDefaultInstance())
+        this.legoSorterService.startMachine(CommonMessagesProto.Empty.getDefaultInstance())
     }
 
     @SuppressLint("CheckResult")
@@ -61,23 +61,30 @@ class LegoBrickAsyncSorterService {
         this.legoSorterService.stopMachine(CommonMessagesProto.Empty.getDefaultInstance())
     }
 
+    fun stopImageCapturing() {
+        terminated.set(true)
+    }
+
     fun scheduleImageCapturingAndStartMachine(
         imageCapture: ImageCapture,
         runTime: Int,
+        continousMode: Boolean,
         callback: (ImageProxy) -> Unit
     ) {
         terminated.set(false)
         canProcessNext.set(true)
         captureExecutor.submit {
+            if (continousMode) startConveyorBelt()
             while (!terminated.get()) {
                 synchronized(canProcessNext) {
                     if (canProcessNext.get()) {
                         canProcessNext.set(false)
-                        stopConveyorBelt()
+                        if (!continousMode) stopConveyorBelt()
                         captureImage(imageCapture) { image ->
                             callback(image)
                             if (!terminated.get()) {
-                                startConveyorBelt()
+                                if (!continousMode) startConveyorBelt()
+                                println("[LegoBrickAsyncSorterService] Delaying capture for $runTime")
                                 Thread.sleep(runTime.toLong())
                                 canProcessNext.set(true)
                             }
@@ -86,6 +93,7 @@ class LegoBrickAsyncSorterService {
                     Thread.sleep(10)
                 }
             }
+            stopConveyorBelt()
         }
     }
 
