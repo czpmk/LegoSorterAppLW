@@ -1,4 +1,4 @@
-package com.lsorter.sort;
+package com.lsorter.sort
 
 import android.annotation.SuppressLint
 import android.graphics.Rect
@@ -68,22 +68,25 @@ class LegoBrickAsyncSorterService {
     fun scheduleImageCapturingAndStartMachine(
         imageCapture: ImageCapture,
         runTime: Int,
-        continousMode: Boolean,
+        /*continousMode: Boolean,*/
         callback: (ImageProxy) -> Unit
     ) {
         terminated.set(false)
         canProcessNext.set(true)
         captureExecutor.submit {
-            if (continousMode) startConveyorBelt()
+            //if (continousMode)
+            startConveyorBelt()
             while (!terminated.get()) {
                 synchronized(canProcessNext) {
                     if (canProcessNext.get()) {
                         canProcessNext.set(false)
-                        if (!continousMode) stopConveyorBelt()
+                        //if (!continousMode)
+                        stopConveyorBelt()
                         captureImage(imageCapture) { image ->
                             callback(image)
                             if (!terminated.get()) {
-                                if (!continousMode) startConveyorBelt()
+                                //if (!continousMode)
+                                startConveyorBelt()
                                 println("[LegoBrickAsyncSorterService] Delaying capture for $runTime")
                                 Thread.sleep(runTime.toLong())
                                 canProcessNext.set(true)
@@ -112,7 +115,6 @@ class LegoBrickAsyncSorterService {
             ).setRotation(image.imageInfo.rotationDegrees)
             .build()
         image.close()
-        Log.d("[processImage2]", "DEBUG")
         this.legoAsyncSorterService.processImage(imageRequest)
     }
 

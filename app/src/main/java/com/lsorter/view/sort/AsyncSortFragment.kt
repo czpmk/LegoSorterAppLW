@@ -6,6 +6,7 @@ import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import androidx.lifecycle.ViewModelProvider
 import android.os.Bundle
+import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
@@ -24,6 +25,7 @@ import com.lsorter.databinding.FragmentSortBinding
 import com.lsorter.sort.DefaultLegoBrickSorterService
 import com.lsorter.sort.LegoBrickAsyncSorterService
 import com.lsorter.sort.LegoBrickSorterService
+import com.lsorter.utils.DelayedImageAnalyzer
 import com.lsorter.utils.PreferencesUtils
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -151,6 +153,8 @@ class AsyncSortFragment : Fragment() {
 
     private fun stopSorting() {
         asyncSorterService.stopImageCapturing()
+        cameraProvider.unbindAll()
+        initialize(startProcessing = false)
     }
 
     private fun initialize(startProcessing: Boolean = false): ListenableFuture<ProcessCameraProvider> {
@@ -183,19 +187,7 @@ class AsyncSortFragment : Fragment() {
 
                     asyncSorterService.scheduleImageCapturingAndStartMachine(
                         imageCapture,
-                        runConveyorTime,
-                        continousMode = false
-                    ) { image -> processImage(image) }
-                    camera
-                } else if (sortingMode == CONTINUOUS_DELAYED_CAPTURE_PREFERENCE) {
-                    val imageCapture = getImageCapture()
-                    val camera =
-                        cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture, preview)
-
-                    asyncSorterService.scheduleImageCapturingAndStartMachine(
-                        imageCapture,
-                        runConveyorTime,
-                        continousMode = true
+                        runConveyorTime
                     ) { image -> processImage(image) }
                     camera
                 } else {
@@ -239,6 +231,19 @@ class AsyncSortFragment : Fragment() {
     }
 
     private fun getImageAnalysis(): ImageAnalysis {
+        val pref = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        val sleepTime =
+            pref.getString(RUN_CONVEYOR_TIME_PREFERENCE_KEY, "500")!!.toInt()
+        val sortingMode = pref.getString(SORTING_MODE_PREFERENCE_KEY, "0")!!.toInt()
+        Log.d("[AsyncSortFragment]", "sortingMode: $sortingMode sleepTime: $sleepTime")
+        var analyzer = ImageAnalysis.Analyzer { image -> processImage(image) }
+
+        if (sortingMode == DELAYED_CAPTURE_CONTINUOUS_MOVE_PREFERENCE) {
+            analyzer = DelayedImageAnalyzer(asyncSorterService, sleepTime)
+        }
+
+        Log.d("[AsyncSortFragment]", analyzer.toString())
+
         return PreferencesUtils.extendImageAnalysis(ImageAnalysis.Builder(), context)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_BLOCK_PRODUCER)
             .setImageQueueDepth(1)
@@ -246,7 +251,7 @@ class AsyncSortFragment : Fragment() {
             .also {
                 it.setAnalyzer(
                     cameraExecutor,
-                    ImageAnalysis.Analyzer { image -> processImage(image) }
+                    analyzer
                 )
             }
     }
@@ -280,7 +285,7 @@ class AsyncSortFragment : Fragment() {
         const val SORTING_MODE_PREFERENCE_KEY: String = "SORTER_MODE_PREFERENCE"
         const val STOP_CAPTURE_RUN_PREFERENCE: Int = 0
         const val CONTINUOUS_MOVE_PREFERENCE: Int = 1
-        const val CONTINUOUS_DELAYED_CAPTURE_PREFERENCE: Int = 2
+        const val DELAYED_CAPTURE_CONTINUOUS_MOVE_PREFERENCE: Int = 2
         const val RUN_CONVEYOR_TIME_PREFERENCE_KEY: String = "RUN_CONVEYOR_TIME_VALUE"
         const val CONVEYOR_SPEED_VALUE_PREFERENCE_KEY: String = "SORTER_CONVEYOR_SPEED_VALUE"
     }
