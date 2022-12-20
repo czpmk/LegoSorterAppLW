@@ -218,7 +218,7 @@ class SortFragment : Fragment() {
         var analyzer = ImageAnalysis.Analyzer { image -> processImageAndDrawBricks(image) }
 
         if (sortingMode == AsyncSortFragment.DELAYED_CAPTURE_CONTINUOUS_MOVE_PREFERENCE) {
-            analyzer = DelayedImageAnalyzer(sorterService, sleepTime)
+            analyzer = DelayedImageAnalyzer(sleepTime, this)
         }
 
         Log.d("[SortFragment]", analyzer.toString())
@@ -234,7 +234,7 @@ class SortFragment : Fragment() {
             }
     }
 
-    private fun processImageAndDrawBricks(image: ImageProxy) {
+    fun processImageAndDrawBricks(image: ImageProxy) {
         if (isSortingStarted.get()) {
             binding.graphicOverlay.setImageSourceInfo(
                 image.width,

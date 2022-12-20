@@ -1,12 +1,14 @@
 package com.lsorter.utils
 
+import android.content.Context
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import com.lsorter.sort.LegoBrickSorterService
+import com.lsorter.view.sort.SortFragment
 
 class DelayedImageAnalyzer(
-    private val legoBrickSorterService: LegoBrickSorterService,
-    private val delayTime: Int
+    private val delayTime: Int,
+    private val parent: SortFragment
 ) : ImageAnalysis.Analyzer {
     var latestAnalysisTimestamp = 0L
     override fun analyze(image: ImageProxy) {
@@ -19,6 +21,6 @@ class DelayedImageAnalyzer(
         }
 
         latestAnalysisTimestamp = System.currentTimeMillis()
-        legoBrickSorterService.processImage(image)
+        parent.processImageAndDrawBricks(image)
     }
 }
