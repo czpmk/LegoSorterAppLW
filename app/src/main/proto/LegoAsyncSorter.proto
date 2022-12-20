@@ -12,4 +12,6 @@ service LegoAsyncSorter {
   rpc updateConfiguration(common.SorterConfiguration) returns (common.Empty);
   rpc start(common.Empty) returns (common.Empty);
   rpc stop(common.Empty) returns (common.Empty);
+  rpc startMachine(common.Empty) returns (common.Empty);
+  rpc stopMachine(common.Empty) returns (common.Empty);
 }

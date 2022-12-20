@@ -26,11 +26,8 @@ class LegoBrickAsyncSorterService {
     private var canProcessNext: AtomicBoolean = AtomicBoolean(true)
     private val connectionManager: ConnectionManager = ConnectionManager()
     private val legoAsyncSorterService: LegoAsyncSorterGrpc.LegoAsyncSorterBlockingStub
-    private val legoSorterService: LegoSorterGrpc.LegoSorterBlockingStub
 
     init {
-        this.legoSorterService =
-            LegoSorterGrpc.newBlockingStub(connectionManager.getConnectionChannel())
         this.legoAsyncSorterService =
             LegoAsyncSorterGrpc.newBlockingStub(connectionManager.getConnectionChannel())
     }
@@ -52,13 +49,13 @@ class LegoBrickAsyncSorterService {
     }
 
     @SuppressLint("CheckResult")
-    fun startConveyorBelt() {
-        this.legoSorterService.startMachine(CommonMessagesProto.Empty.getDefaultInstance())
+    fun startMachine() {
+        this.legoAsyncSorterService.startMachine(CommonMessagesProto.Empty.getDefaultInstance())
     }
 
     @SuppressLint("CheckResult")
-    fun stopConveyorBelt() {
-        this.legoSorterService.stopMachine(CommonMessagesProto.Empty.getDefaultInstance())
+    fun stopMachine() {
+        this.legoAsyncSorterService.stopMachine(CommonMessagesProto.Empty.getDefaultInstance())
     }
 
     fun stopImageCapturing() {
@@ -75,18 +72,18 @@ class LegoBrickAsyncSorterService {
         canProcessNext.set(true)
         captureExecutor.submit {
             //if (continousMode)
-            startConveyorBelt()
+            startMachine()
             while (!terminated.get()) {
                 synchronized(canProcessNext) {
                     if (canProcessNext.get()) {
                         canProcessNext.set(false)
                         //if (!continousMode)
-                        stopConveyorBelt()
+                        stopMachine()
                         captureImage(imageCapture) { image ->
                             callback(image)
                             if (!terminated.get()) {
                                 //if (!continousMode)
-                                startConveyorBelt()
+                                startMachine()
                                 println("[LegoBrickAsyncSorterService] Delaying capture for $runTime")
                                 Thread.sleep(runTime.toLong())
                                 canProcessNext.set(true)
@@ -96,7 +93,7 @@ class LegoBrickAsyncSorterService {
                     Thread.sleep(10)
                 }
             }
-            stopConveyorBelt()
+            stopMachine()
         }
     }
 

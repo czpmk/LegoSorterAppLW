@@ -38,7 +38,6 @@ class AsyncSortFragment : Fragment() {
     private lateinit var viewModel: SortViewModel
     private lateinit var binding: FragmentSortBinding
     private lateinit var cameraProvider: ProcessCameraProvider
-    private lateinit var sorterService: LegoBrickSorterService
     private lateinit var asyncSorterService: LegoBrickAsyncSorterService
 
 
@@ -82,7 +81,6 @@ class AsyncSortFragment : Fragment() {
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
 
-        sorterService = DefaultLegoBrickSorterService()
         asyncSorterService = LegoBrickAsyncSorterService()
 
         viewModel.eventStartStopSortingButtonClicked.observe(
@@ -135,11 +133,11 @@ class AsyncSortFragment : Fragment() {
     }
 
     private fun startMachine() {
-        sorterService.startMachine()
+        asyncSorterService.startMachine()
     }
 
     private fun stopMachine() {
-        sorterService.stopMachine()
+        asyncSorterService.stopMachine()
     }
 
     private fun setVisibilityOfFocusSeeker(visibility: Int) {
@@ -243,7 +241,6 @@ class AsyncSortFragment : Fragment() {
         }
 
         Log.d("[AsyncSortFragment]", analyzer.toString())
-
         return PreferencesUtils.extendImageAnalysis(ImageAnalysis.Builder(), context)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_BLOCK_PRODUCER)
             .setImageQueueDepth(1)
