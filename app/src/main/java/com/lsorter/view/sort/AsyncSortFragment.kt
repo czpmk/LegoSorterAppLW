@@ -25,7 +25,7 @@ import com.lsorter.databinding.FragmentSortBinding
 import com.lsorter.sort.DefaultLegoBrickSorterService
 import com.lsorter.sort.LegoBrickAsyncSorterService
 import com.lsorter.sort.LegoBrickSorterService
-import com.lsorter.utils.DelayedImageAnalyzer
+import com.lsorter.utils.DelayedAsyncImageAnalyzer
 import com.lsorter.utils.PreferencesUtils
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -237,7 +237,7 @@ class AsyncSortFragment : Fragment() {
         var analyzer = ImageAnalysis.Analyzer { image -> processImage(image) }
 
         if (sortingMode == DELAYED_CAPTURE_CONTINUOUS_MOVE_PREFERENCE) {
-            analyzer = DelayedImageAnalyzer(asyncSorterService, sleepTime)
+            analyzer = DelayedAsyncImageAnalyzer(asyncSorterService, sleepTime)
         }
 
         Log.d("[AsyncSortFragment]", analyzer.toString())

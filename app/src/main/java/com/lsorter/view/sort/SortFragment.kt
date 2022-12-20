@@ -6,6 +6,7 @@ import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import androidx.lifecycle.ViewModelProvider
 import android.os.Bundle
+import android.util.Log
 import android.util.Size
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
@@ -25,6 +26,7 @@ import com.lsorter.analyze.layer.LegoGraphic
 import com.lsorter.databinding.FragmentSortBinding
 import com.lsorter.sort.DefaultLegoBrickSorterService
 import com.lsorter.sort.LegoBrickSorterService
+import com.lsorter.utils.DelayedImageAnalyzer
 import com.lsorter.utils.PreferencesUtils
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -208,6 +210,18 @@ class SortFragment : Fragment() {
     }
 
     private fun getImageAnalysis(): ImageAnalysis {
+        val pref = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        val sleepTime =
+            pref.getString(AsyncSortFragment.RUN_CONVEYOR_TIME_PREFERENCE_KEY, "500")!!.toInt()
+        val sortingMode = pref.getString(AsyncSortFragment.SORTING_MODE_PREFERENCE_KEY, "0")!!.toInt()
+        Log.d("[SortFragment]", "sortingMode: $sortingMode sleepTime: $sleepTime")
+        var analyzer = ImageAnalysis.Analyzer { image -> processImageAndDrawBricks(image) }
+
+        if (sortingMode == AsyncSortFragment.DELAYED_CAPTURE_CONTINUOUS_MOVE_PREFERENCE) {
+            analyzer = DelayedImageAnalyzer(sorterService, sleepTime)
+        }
+
+        Log.d("[SortFragment]", analyzer.toString())
         return PreferencesUtils.extendImageAnalysis(ImageAnalysis.Builder(), context)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_BLOCK_PRODUCER)
             .setImageQueueDepth(1)
@@ -215,7 +229,7 @@ class SortFragment : Fragment() {
             .also {
                 it.setAnalyzer(
                     cameraExecutor,
-                    ImageAnalysis.Analyzer { image -> processImageAndDrawBricks(image) }
+                    analyzer
                 )
             }
     }
@@ -280,6 +294,7 @@ class SortFragment : Fragment() {
         const val SORTING_MODE_PREFERENCE_KEY: String = "SORTER_MODE_PREFERENCE"
         const val STOP_CAPTURE_RUN_PREFERENCE: Int = 0
         const val CONTINUOUS_MOVE_PREFERENCE: Int = 1
+        const val DELAYED_CAPTURE_CONTINUOUS_MOVE_PREFERENCE: Int = 2
         const val RUN_CONVEYOR_TIME_PREFERENCE_KEY: String = "RUN_CONVEYOR_TIME_VALUE"
         const val CONVEYOR_SPEED_VALUE_PREFERENCE_KEY: String = "SORTER_CONVEYOR_SPEED_VALUE"
     }
