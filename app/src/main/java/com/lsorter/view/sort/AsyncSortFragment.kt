@@ -242,7 +242,7 @@ class AsyncSortFragment : Fragment() {
 
         Log.d("[AsyncSortFragment]", analyzer.toString())
         return PreferencesUtils.extendImageAnalysis(ImageAnalysis.Builder(), context)
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_BLOCK_PRODUCER)
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setImageQueueDepth(1)
             .build()
             .also {
